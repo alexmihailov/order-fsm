@@ -7,6 +7,8 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
+import java.util.UUID
+
 class OrderFsmActorTest extends TestKit(ActorSystem("order-system"))
   with ImplicitSender
   with AnyWordSpecLike
@@ -17,11 +19,19 @@ class OrderFsmActorTest extends TestKit(ActorSystem("order-system"))
     TestKit.shutdownActorSystem(system)
   }
 
-  "Order actor created" must {
-    "NEW state" in {
-      val orderFsmActor = system.actorOf(Props(classOf[OrderFsmActor]))
-      orderFsmActor ! SubscribeTransitionCallBack(testActor)
-      expectMsg(CurrentState(orderFsmActor, New))
-    }
+  "Order FSM actor" in {
+    val orderFsmActor = system.actorOf(Props(classOf[OrderFsmActor], testActor))
+    val itemIds = List.fill(3) { UUID.randomUUID() }
+
+    // switch New state after creation
+    orderFsmActor ! SubscribeTransitionCallBack(testActor)
+    expectMsg(CurrentState(orderFsmActor, New))
+
+    orderFsmActor ! OrderConfirmation(itemIds)
+    expectMsg(StoreServiceRequest(orderFsmActor, itemIds))  // send StoreServiceRequest msg
+    expectMsg(Transition(orderFsmActor, New, Ordered))      // switch to the Ordered state
+
+    orderFsmActor ! CancelOrder
+    expectMsg(Transition(orderFsmActor, Ordered, Canceled)) // switch to the Canceled state
   }
 }
