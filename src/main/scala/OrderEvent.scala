@@ -37,6 +37,13 @@ case class StoreServiceRequest(reply: ActorRef, ids: List[UUID]) extends OrderEv
 case class StoreServiceResponse(success: Boolean) extends OrderEvent
 
 /**
+ * Отменить резервацию товаров.
+ *
+ * @param ids идентификаторы товаров в заказе для отмены резервации
+ */
+case class CancelReservation(ids: List[UUID]) extends OrderEvent
+
+/**
  * Заказ оплачен пользователем.
  */
 case object OrderPayed extends OrderEvent

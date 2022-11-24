@@ -3,9 +3,11 @@ package com.witcher.order
 import akka.actor.{ActorRef, FSM}
 
 import java.util.UUID
+import scala.concurrent.duration.FiniteDuration
 
 class OrderFsmActor(
   orderId: UUID,
+  val reservedTimeout: FiniteDuration,
   val storeServiceActor: ActorRef,
   val deliveryServiceActor: ActorRef,
   val notifyServiceActor: ActorRef,
@@ -24,8 +26,9 @@ class OrderFsmActor(
     case Event(StoreServiceResponse(success), _) =>
       if (success) goto(Reserved) else goto(Canceled)
   }
-  when(Reserved) {
+  when(Reserved, stateTimeout = reservedTimeout) {
     case Event(OrderPayed, _) => goto(Payed)
+    case Event(CancelOrder | StateTimeout, _) => goto(Canceled)
   }
   when(Payed) {
     case Event(DeliveryServiceResponse(success), _) =>
@@ -61,6 +64,11 @@ class OrderFsmActor(
     case Reserved -> Payed => stateData match {
       case OrderDetail(id, _) =>
         deliveryServiceActor ! DeliveryServiceRequest(self, id)
+      case _ => // nothing to do
+    }
+    case Reserved -> Canceled => stateData match {
+      case OrderDetail(_, itemIds) =>
+        storeServiceActor ! CancelReservation(itemIds)
       case _ => // nothing to do
     }
     case Reserved -> Reserved => stateData match {

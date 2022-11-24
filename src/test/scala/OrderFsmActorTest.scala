@@ -1,17 +1,18 @@
 package com.witcher.order
 
 import akka.actor.FSM.{CurrentState, SubscribeTransitionCallBack, Transition}
-import akka.actor.{ActorSystem, Props}
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.testkit.{ImplicitSender, TestKit}
 import org.scalatest.BeforeAndAfterAll
+import org.scalatest.funspec.AnyFunSpecLike
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.wordspec.AnyWordSpecLike
 
 import java.util.UUID
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 class OrderFsmActorTest extends TestKit(ActorSystem("order-system"))
   with ImplicitSender
-  with AnyWordSpecLike
+  with AnyFunSpecLike
   with Matchers
   with BeforeAndAfterAll {
 
@@ -19,56 +20,112 @@ class OrderFsmActorTest extends TestKit(ActorSystem("order-system"))
     TestKit.shutdownActorSystem(system)
   }
 
-  "Order FSM actor" in {
-    val orderId = UUID.randomUUID()
-    val orderFsmActor = system.actorOf(Props(classOf[OrderFsmActor], orderId, testActor, testActor, testActor))
-    val itemIds = List.fill(3) { UUID.randomUUID() }
+  private val emptyActor = system.actorOf(Props.empty)
+  private def createOrderFsmActor(
+    orderId: UUID = UUID.randomUUID(),
+    reservedTimeout: FiniteDuration = 1.seconds,
+    storeServiceActor: ActorRef = emptyActor,
+    deliveryServiceActor: ActorRef = emptyActor,
+    notifyServiceActor: ActorRef = emptyActor,
+  ): ActorRef =
+    system.actorOf(Props(classOf[OrderFsmActor], orderId, reservedTimeout,
+      storeServiceActor, deliveryServiceActor, notifyServiceActor))
 
-    // Создаем заказ со статусом NEW.
-    orderFsmActor ! SubscribeTransitionCallBack(testActor)
-    expectMsg(CurrentState(orderFsmActor, New))
+  describe("Order FSM actor") {
+    describe("in success cases") {
+      val orderId = UUID.randomUUID()
+      val itemIds = List.fill(3) { UUID.randomUUID() }
+      val orderFsmActor = createOrderFsmActor(orderId, 1.seconds, testActor, testActor, testActor)
 
-    // Отправка подтверждения дальнейшей обработки заказа.
-    orderFsmActor ! OrderConfirmation(itemIds)
-    // Нужно проверить, имеется ли нужные товары на складах и зарезервировать их.
-    expectMsg(StoreServiceRequest(orderFsmActor, itemIds))
-    // Заказ переходит в статус ORDERED из статуса NEW.
-    expectMsg(Transition(orderFsmActor, New, Ordered))
+      it("must create order in NEW status") {
+        orderFsmActor ! SubscribeTransitionCallBack(testActor)
+        expectMsg(CurrentState(orderFsmActor, New))
+      }
 
-    // Отправка успеха резервации товаров.
-    orderFsmActor ! StoreServiceResponse(true)
-    // Заказ переходит в статус RESERVED из статуса ORDERED.
-    expectMsg(Transition(orderFsmActor, Ordered, Reserved))
+      it("must check if the desired goods are in store and reserve them") {
+        orderFsmActor ! OrderConfirmation(itemIds)
+        expectMsg(StoreServiceRequest(orderFsmActor, itemIds))
+      }
 
-    // Пользователь оплатил заказ.
-    orderFsmActor ! OrderPayed
-    // Отправить данные по заказу в систему доставки.
-    expectMsg(DeliveryServiceRequest(orderFsmActor, orderId))
-    // Заказ переходит в статус PAYED из статуса RESERVED.
-    expectMsg(Transition(orderFsmActor, Reserved, Payed))
+      it("must moves to the ORDERED status from the NEW status") {
+        expectMsg(Transition(orderFsmActor, New, Ordered))
+      }
 
-    // Система доставки разместила заказ.
-    orderFsmActor ! DeliveryServiceResponse(true)
-    // Заказ переходит в статус SHIPPED из статуса PAYED.
-    expectMsg(Transition(orderFsmActor, Payed, Shipped))
+      it("must moves to the RESERVED status from the ORDERED status") {
+        orderFsmActor ! StoreServiceResponse(true)
+        expectMsg(Transition(orderFsmActor, Ordered, Reserved))
+      }
 
-    // Заказ прибыл в пункт выдачи.
-    orderFsmActor ! OrderInPickupPoint
-    // Нотификация пользователя о прибытии заказа в пункт выдачи.
-    expectMsg(UserNotify(orderId))
-    // Заказ переходит в статус DELIVERED из статуса SHIPPED.
-    expectMsg(Transition(orderFsmActor, Shipped, Delivered))
+      it("must send order data to the delivery system") {
+        orderFsmActor ! OrderPayed
+        expectMsg(DeliveryServiceRequest(orderFsmActor, orderId))
+      }
 
-    // Пользователь получил заказ.
-    orderFsmActor ! OrderReceived
-    // Заказ переходит в статус COMPLETED из статуса DELIVERED.
-    expectMsg(Transition(orderFsmActor, Delivered, Completed))
+      it("must moves to the PAYED status from the RESERVED status") {
+        expectMsg(Transition(orderFsmActor, Reserved, Payed))
+      }
+
+      it("must moves to the SHIPPED status from the PAYED status") {
+        orderFsmActor ! DeliveryServiceResponse(true)
+        expectMsg(Transition(orderFsmActor, Payed, Shipped))
+      }
+
+      it("must send a notification to the user about the arrival of the order at the pickup point") {
+        orderFsmActor ! OrderInPickupPoint
+        expectMsg(UserNotify(orderId))
+      }
+
+      it("must moves to the DELIVERED status from the SHIPPED status") {
+        expectMsg(Transition(orderFsmActor, Shipped, Delivered))
+      }
+
+      it("must moves to the COMPLETED status from the DELIVERED status") {
+        orderFsmActor ! OrderReceived
+        expectMsg(Transition(orderFsmActor, Delivered, Completed))
+      }
+    }
+    describe("must moves to the CANCELLED status from the ORDERED status") {
+      val createActor = () => {
+        val orderFsmActor = createOrderFsmActor()
+        orderFsmActor ! OrderConfirmation(List.empty)
+        orderFsmActor ! SubscribeTransitionCallBack(testActor)
+        expectMsg(CurrentState(orderFsmActor, Ordered))
+        orderFsmActor
+      }
+      it("if user canceling order") {
+        val orderFsmActor = createActor()
+        orderFsmActor ! CancelOrder
+        expectMsg(Transition(orderFsmActor, Ordered, Canceled))
+      }
+      it ("if the items not available in warehouses") {
+        val orderFsmActor = createActor()
+        orderFsmActor ! StoreServiceResponse(false)
+        expectMsg(Transition(orderFsmActor, Ordered, Canceled))
+      }
+    }
+    describe("must moves to the CANCELLED status from the RESERVED status") {
+      val itemIds = List.fill(2) { UUID.randomUUID() }
+      val timeout = 2.seconds
+      val createActor = () => {
+        val orderFsmActor = createOrderFsmActor(storeServiceActor = testActor, reservedTimeout = timeout)
+        orderFsmActor ! OrderConfirmation(itemIds)
+        expectMsg(StoreServiceRequest(orderFsmActor, itemIds))
+        orderFsmActor ! StoreServiceResponse(true)
+        orderFsmActor ! SubscribeTransitionCallBack(testActor)
+        expectMsg(CurrentState(orderFsmActor, Reserved))
+        orderFsmActor
+      }
+      it("if user canceling order") {
+        val orderFsmActor = createActor()
+        orderFsmActor ! CancelOrder
+        expectMsg(CancelReservation(itemIds))
+        expectMsg(Transition(orderFsmActor, Reserved, Canceled))
+      }
+      it("if the user has not made a payment within 2 seconds") {
+        val orderFsmActor = createActor()
+        expectMsg(timeout + 1.seconds, CancelReservation(itemIds))
+        expectMsg(Transition(orderFsmActor, Reserved, Canceled))
+      }
+    }
   }
-
-// TODO: отдельно проверять кейсы отмены заказа
-//  orderFsmActor ! CancelOrder
-//  expectMsg(Transition(orderFsmActor, Ordered, Canceled)) // switch to the Canceled state
-
-// TODO: Если получена ошибка при отправке заказа в службу доставки, то нужно повторить запрос N раз через M промежутки времени.
-//  Если и в этом случаем получаем ошибку, то направить уведомление администратору.
 }
