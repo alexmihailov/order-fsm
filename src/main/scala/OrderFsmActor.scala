@@ -1,16 +1,16 @@
 package com.witcher.order
 
-import akka.actor.{ActorRef, FSM}
+import akka.actor.{ActorRef, FSM, PoisonPill, Props}
 
 import java.util.UUID
 import scala.concurrent.duration.FiniteDuration
 
 class OrderFsmActor(
   orderId: UUID,
-  val reservedTimeout: FiniteDuration,
-  val storeServiceActor: ActorRef,
-  val deliveryServiceActor: ActorRef,
-  val notifyServiceActor: ActorRef,
+  private val config: OrderFsmActor.Config,
+  private val storeServiceActor: ActorRef,
+  private val deliveryServiceActor: ActorRef,
+  private val notifyServiceActor: ActorRef,
 ) extends FSM[OrderState, OrderData] {
 
   // Указываем начальное состояние и начальные данные.
@@ -26,7 +26,7 @@ class OrderFsmActor(
     case Event(StoreServiceResponse(success), _) =>
       if (success) goto(Reserved) else goto(Canceled)
   }
-  when(Reserved, stateTimeout = reservedTimeout) {
+  when(Reserved, stateTimeout = config.reservedTimeout) {
     case Event(OrderPayed, _) => goto(Payed)
     case Event(CancelOrder | StateTimeout, _) => goto(Canceled)
   }
@@ -41,10 +41,10 @@ class OrderFsmActor(
     case Event(OrderReceived, _) => goto(Completed)
   }
   when(Completed) {
-    case Event(_, _) => stay()
+    case Event(_, _) => stop()
   }
   when(Canceled) {
-    case Event(_, _) => stay()
+    case Event(_, _) => stop()
   }
   whenUnhandled {
     case Event(e, s) =>
@@ -63,7 +63,11 @@ class OrderFsmActor(
     }
     case Reserved -> Payed => stateData match {
       case OrderDetail(id, _) =>
-        deliveryServiceActor ! DeliveryServiceRequest(self, id)
+        val retryActor = context.actorOf(
+          Props(classOf[DeliveryFsmActor], config.deliveryConfig, deliveryServiceActor, self, id),
+          s"delivery-fsm-$orderId"
+        )
+        retryActor ! DeliveryServiceRequest
       case _ => // nothing to do
     }
     case Reserved -> Canceled => stateData match {
@@ -71,9 +75,10 @@ class OrderFsmActor(
         storeServiceActor ! CancelReservation(itemIds)
       case _ => // nothing to do
     }
-    case Reserved -> Reserved => stateData match {
-      case OrderDetail(id, _) =>
-        deliveryServiceActor ! DeliveryServiceRequest(self, id)
+    case Payed -> Shipped => stopDeliveryFsm()
+    case Payed -> Payed => stateData match {
+      case OrderDetail(orderId, _) =>
+        notifyServiceActor ! ManagerNotify(orderId)
       case _ => // nothing to do
     }
     case Shipped -> Delivered => stateData match {
@@ -81,7 +86,15 @@ class OrderFsmActor(
         notifyServiceActor ! UserNotify(id)
       case _ => // nothing to do
     }
+    case _ -> Completed | _ -> Canceled => self ! StopOrder
   }
 
   initialize()
+
+  private def stopDeliveryFsm(): Unit =
+    context.children.filter(_.path.name.contains("delivery-fsm")).foreach(_ ! PoisonPill)
+}
+
+object OrderFsmActor {
+  case class Config(reservedTimeout: FiniteDuration, deliveryConfig: DeliveryFsmActor.Config)
 }

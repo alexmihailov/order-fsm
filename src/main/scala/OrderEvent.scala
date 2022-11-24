@@ -50,11 +50,8 @@ case object OrderPayed extends OrderEvent
 
 /**
  * Запрос для размещения заказа в системе доставки.
- *
- * @param reply кому прислать ответ
- * @param orderId идентификатор заказа
  */
-case class DeliveryServiceRequest(reply: ActorRef, orderId: UUID) extends OrderEvent
+case object DeliveryServiceRequest extends OrderEvent
 
 /**
  * Ответ системы доставки о размещении заказа.
@@ -79,3 +76,15 @@ case class UserNotify(orderId: UUID) extends OrderEvent
  * Пользователь получил заказ.
  */
 case object OrderReceived extends OrderEvent
+
+/**
+ * Остановка автомата.
+ */
+case object StopOrder extends OrderEvent
+
+/**
+ * Оповещение администратора системы.
+ *
+ * @param orderId идентификатор заказа
+ */
+case class ManagerNotify(orderId: UUID) extends OrderEvent

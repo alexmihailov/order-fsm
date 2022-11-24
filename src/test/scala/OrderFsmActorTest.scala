@@ -27,9 +27,11 @@ class OrderFsmActorTest extends TestKit(ActorSystem("order-system"))
     storeServiceActor: ActorRef = emptyActor,
     deliveryServiceActor: ActorRef = emptyActor,
     notifyServiceActor: ActorRef = emptyActor,
-  ): ActorRef =
-    system.actorOf(Props(classOf[OrderFsmActor], orderId, reservedTimeout,
-      storeServiceActor, deliveryServiceActor, notifyServiceActor))
+  ): ActorRef = {
+    val deliveryConfig = DeliveryFsmActor.Config(5, 3.seconds, 2.seconds)
+    val orderConfig = OrderFsmActor.Config(reservedTimeout, deliveryConfig)
+    system.actorOf(Props(classOf[OrderFsmActor], orderId, orderConfig, storeServiceActor, deliveryServiceActor, notifyServiceActor))
+  }
 
   describe("Order FSM actor") {
     describe("in success cases") {
@@ -37,7 +39,7 @@ class OrderFsmActorTest extends TestKit(ActorSystem("order-system"))
       val itemIds = List.fill(3) { UUID.randomUUID() }
       val orderFsmActor = createOrderFsmActor(orderId, 1.seconds, testActor, testActor, testActor)
 
-      it("must create order in NEW status") {
+      it("must create order in NEW state") {
         orderFsmActor ! SubscribeTransitionCallBack(testActor)
         expectMsg(CurrentState(orderFsmActor, New))
       }
@@ -47,25 +49,25 @@ class OrderFsmActorTest extends TestKit(ActorSystem("order-system"))
         expectMsg(StoreServiceRequest(orderFsmActor, itemIds))
       }
 
-      it("must moves to the ORDERED status from the NEW status") {
+      it("must moves to the ORDERED state from the NEW state") {
         expectMsg(Transition(orderFsmActor, New, Ordered))
       }
 
-      it("must moves to the RESERVED status from the ORDERED status") {
+      it("must moves to the RESERVED state from the ORDERED state") {
         orderFsmActor ! StoreServiceResponse(true)
         expectMsg(Transition(orderFsmActor, Ordered, Reserved))
       }
 
-      it("must send order data to the delivery system") {
+      it("must moves to the PAYED state from the RESERVED state") {
         orderFsmActor ! OrderPayed
-        expectMsg(DeliveryServiceRequest(orderFsmActor, orderId))
-      }
-
-      it("must moves to the PAYED status from the RESERVED status") {
         expectMsg(Transition(orderFsmActor, Reserved, Payed))
       }
 
-      it("must moves to the SHIPPED status from the PAYED status") {
+      it("must send order data to the delivery system") {
+        expectMsgType[DeliveryRequest](1.seconds)
+      }
+
+      it("must moves to the SHIPPED state from the PAYED state") {
         orderFsmActor ! DeliveryServiceResponse(true)
         expectMsg(Transition(orderFsmActor, Payed, Shipped))
       }
@@ -75,16 +77,16 @@ class OrderFsmActorTest extends TestKit(ActorSystem("order-system"))
         expectMsg(UserNotify(orderId))
       }
 
-      it("must moves to the DELIVERED status from the SHIPPED status") {
+      it("must moves to the DELIVERED state from the SHIPPED state") {
         expectMsg(Transition(orderFsmActor, Shipped, Delivered))
       }
 
-      it("must moves to the COMPLETED status from the DELIVERED status") {
+      it("must moves to the COMPLETED state from the DELIVERED state") {
         orderFsmActor ! OrderReceived
         expectMsg(Transition(orderFsmActor, Delivered, Completed))
       }
     }
-    describe("must moves to the CANCELLED status from the ORDERED status") {
+    describe("must moves to the CANCELLED state from the ORDERED state") {
       val createActor = () => {
         val orderFsmActor = createOrderFsmActor()
         orderFsmActor ! OrderConfirmation(List.empty)
@@ -103,7 +105,7 @@ class OrderFsmActorTest extends TestKit(ActorSystem("order-system"))
         expectMsg(Transition(orderFsmActor, Ordered, Canceled))
       }
     }
-    describe("must moves to the CANCELLED status from the RESERVED status") {
+    describe("must moves to the CANCELLED state from the RESERVED state") {
       val itemIds = List.fill(2) { UUID.randomUUID() }
       val timeout = 2.seconds
       val createActor = () => {
@@ -126,6 +128,18 @@ class OrderFsmActorTest extends TestKit(ActorSystem("order-system"))
         expectMsg(timeout + 1.seconds, CancelReservation(itemIds))
         expectMsg(Transition(orderFsmActor, Reserved, Canceled))
       }
+    }
+    it("must send a notification to the manager") {
+      val itemIds = List.fill(2) { UUID.randomUUID() }
+      val orderId = UUID.randomUUID()
+      val orderFsmActor = createOrderFsmActor(orderId, notifyServiceActor = testActor)
+      orderFsmActor ! OrderConfirmation(itemIds)
+      orderFsmActor ! StoreServiceResponse(true)
+      orderFsmActor ! OrderPayed
+      orderFsmActor ! SubscribeTransitionCallBack(testActor)
+      expectMsg(CurrentState(orderFsmActor, Payed))
+      orderFsmActor ! DeliveryServiceResponse(false)
+      expectMsg(ManagerNotify(orderId))
     }
   }
 }
