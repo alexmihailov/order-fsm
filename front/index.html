@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Order FSM</title>
+        <link href="style.css" rel="stylesheet" type="text/css">
+        <script src="script.js"></script>
+    </head>
+    <body>
+        <div class="block_container">
+            <h1>States</h1>
+        </div>
+        <div class="block_container">
+            <div id="New" class="block">NEW</div>
+            <div id="Ordered" class="block">ORDERED</div>
+            <div id="Reserved" class="block">RESERVED</div>
+            <div id="Payed" class="block">PAYED</div>
+            <div id="Shipped" class="block">SHIPPED</div>
+            <div id="Delivered" class="block">DELIVERED</div>
+            <div id="Completed" class="block">COMPLETED</div>
+            <div id="Canceled" class="block">CANCELED</div>
+        </div>
+        <div class="block_buttons">
+            <div class="block_button">
+                <button onclick="connectToWs()">Start</button>
+                <button>Restart</button>
+            </div>
+            <div class="block_button">
+                <button onclick="confirmOrder()">Confirm order</button>
+            </div>
+        </div>
+    </body>
+</html>

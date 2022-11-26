@@ -5,10 +5,10 @@ import delivery.DeliveryFsmActor
 import integration.delivery.DeliveryServiceActor
 import integration.notify.NotifyServiceActor
 import integration.store.StoreServiceActor
-import order.{OrderConfirmation, OrderFsmActor}
+import order.{OrderConfirmation, OrderFsmActor, OrderState}
 
 import akka.{Done, NotUsed}
-import akka.actor.FSM.SubscribeTransitionCallBack
+import akka.actor.FSM.{CurrentState, SubscribeTransitionCallBack, Transition}
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
@@ -31,21 +31,25 @@ object WsMain {
 
   private val globalConfig = ConfigFactory.load()
 
-  private val storeService = system.actorOf(Props(classOf[StoreServiceActor]))
-  private val deliveryService = system.actorOf(Props(classOf[DeliveryServiceActor]))
-  private val notifyServiceActor = system.actorOf(Props(classOf[NotifyServiceActor]))
+  private val storeService = system.actorOf(Props(classOf[StoreServiceActor]), "store-service")
+  private val deliveryService = system.actorOf(Props(classOf[DeliveryServiceActor]), "delivery-service")
+  private val notifyService = system.actorOf(Props(classOf[NotifyServiceActor]), "notify-service")
   private val orderFsm = createOrderFsmActor()
 
   private val websocketRoute = path("order") {
     handleWebSocketMessages(orderFsmWatch)
   }
 
+  private val commands: Map[String, Runnable] = Map (
+    "order-confirmation" -> (() => orderFsm ! OrderConfirmation(List.fill(3) {UUID.randomUUID()}))
+  )
+
   def main(args: Array[String]): Unit = {
     val bindingFuture = Http().newServerAt(
       globalConfig.as[String]("http.host"),
       globalConfig.as[Int]("http.port")
     ).bind(websocketRoute)
-    println(s"Server now online. Please navigate to http://localhost:8080/hello\nPress RETURN to stop...")
+    println(s"Server now online. Please navigate to http://localhost:8080/order\nPress RETURN to stop...")
     StdIn.readLine()
     bindingFuture
       .flatMap(_.unbind())
@@ -53,18 +57,26 @@ object WsMain {
   }
 
   private def orderFsmWatch: Flow[Message, Message, Any] = {
+
+    def run(x: Option[Runnable]): Unit = x match {
+      case Some(r) => r.run()
+    }
+
     val source: Source[Message, NotUsed] = Source.actorRef(
       bufferSize = 10, overflowStrategy = OverflowStrategy.dropTail
-    ).map((c : Any) => TextMessage(c.toString))
+    ).map((c : Any) => c match {
+      case CurrentState(_, state : OrderState) => state.toString
+      case Transition(_, from: OrderState, to: OrderState) => s"$from,$to"
+      case _ => ""
+    })
+      .map((c : Any) => TextMessage(c.toString))
       .mapMaterializedValue { wsHandle =>
         orderFsm ! SubscribeTransitionCallBack(wsHandle)
         NotUsed
       }
     val sink: Sink[Message, Future[Done]] = Sink
       .foreach {
-        case TextMessage.Strict(text) => if (text.equals("start")) {
-          orderFsm ! OrderConfirmation(List.fill(3) { UUID.randomUUID() })
-        }
+        case TextMessage.Strict(text) => run(commands.get(text))
       }
     Flow.fromSinkAndSource(sink, source)
   }
@@ -79,6 +91,9 @@ object WsMain {
       reservedTimeout = globalConfig.as[FiniteDuration]("order.reserved-timeout"),
       deliveryConfig
     )
-    system.actorOf(Props(classOf[OrderFsmActor], UUID.randomUUID(), orderConfig, storeService, deliveryService, notifyServiceActor))
+    system.actorOf(
+      Props(classOf[OrderFsmActor], UUID.randomUUID(), orderConfig, storeService, deliveryService, notifyService),
+      "order-fsm"
+    )
   }
 }

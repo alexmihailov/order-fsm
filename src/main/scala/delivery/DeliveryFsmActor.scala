@@ -4,7 +4,7 @@ package delivery
 import integration.delivery.{DeliveryRequest, DeliveryResponse}
 import order.{DeliveryServiceRequest, DeliveryServiceResponse}
 
-import akka.actor.{ActorRef, FSM}
+import akka.actor.{ActorRef, LoggingFSM}
 
 import java.util.UUID
 import scala.concurrent.duration.FiniteDuration
@@ -14,7 +14,7 @@ class DeliveryFsmActor(
    private val deliveryServiceActor: ActorRef,
    private val orderFsmActor: ActorRef,
    private val orderId: UUID
-) extends FSM[DeliveryState, Int] {
+) extends LoggingFSM[DeliveryState, Int] {
 
   startWith(Idle, 0)
 

@@ -5,7 +5,7 @@ import delivery.DeliveryFsmActor
 import integration.notify.{ManagerNotify, UserNotify}
 import integration.store.{StoreServiceRequest, StoreServiceResponse}
 
-import akka.actor.{ActorRef, FSM, PoisonPill, Props}
+import akka.actor.{ActorRef, LoggingFSM, PoisonPill, Props}
 
 import java.util.UUID
 import scala.concurrent.duration.FiniteDuration
@@ -16,7 +16,7 @@ class OrderFsmActor(
   private val storeServiceActor: ActorRef,
   private val deliveryServiceActor: ActorRef,
   private val notifyServiceActor: ActorRef,
-) extends FSM[OrderState, OrderData] {
+) extends LoggingFSM[OrderState, OrderData] {
 
   // Указываем начальное состояние и начальные данные.
   startWith(New, Uninitialized(orderId))

@@ -1,0 +1,18 @@
+.block_container {
+    text-align:center;
+    padding: 20px;
+}
+.block {
+    display:inline;
+    padding: 40px;
+    border-style: solid;
+}
+
+.block_buttons {
+    text-align:center;
+    padding: 40px;
+}
+
+.block_button {
+    padding: 10px;
+}
