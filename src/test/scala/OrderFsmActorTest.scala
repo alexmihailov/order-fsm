@@ -1,4 +1,10 @@
-package com.witcher.order
+package com.witcher
+
+import delivery.DeliveryFsmActor
+import integration.delivery.DeliveryRequest
+import integration.notify.{ManagerNotify, UserNotify}
+import integration.store.{StoreServiceRequest, StoreServiceResponse}
+import order.{CancelOrder, CancelReservation, Canceled, Completed, Delivered, DeliveryServiceResponse, New, OrderConfirmation, OrderFsmActor, OrderInPickupPoint, OrderPayed, OrderReceived, Ordered, Payed, Reserved, Shipped}
 
 import akka.actor.FSM.{CurrentState, SubscribeTransitionCallBack, Transition}
 import akka.actor.{ActorRef, ActorSystem, Props}
@@ -10,7 +16,7 @@ import org.scalatest.matchers.should.Matchers
 import java.util.UUID
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
-class OrderFsmActorTest extends TestKit(ActorSystem("order-system"))
+class OrderFsmActorTest extends TestKit(ActorSystem("order-system-test"))
   with ImplicitSender
   with AnyFunSpecLike
   with Matchers

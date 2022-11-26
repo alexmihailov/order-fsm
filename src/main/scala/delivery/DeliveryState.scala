@@ -1,4 +1,5 @@
-package com.witcher.order
+package com.witcher
+package delivery
 
 sealed trait DeliveryState
 object Idle extends DeliveryState

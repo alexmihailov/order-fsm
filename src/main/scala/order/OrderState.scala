@@ -1,4 +1,5 @@
-package com.witcher.order
+package com.witcher
+package order
 
 sealed trait OrderState
 case object New extends OrderState

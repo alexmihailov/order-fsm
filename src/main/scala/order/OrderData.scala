@@ -1,4 +1,5 @@
-package com.witcher.order
+package com.witcher
+package order
 
 import java.util.UUID
 

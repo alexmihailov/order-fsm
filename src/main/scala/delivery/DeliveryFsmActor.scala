@@ -1,4 +1,8 @@
-package com.witcher.order
+package com.witcher
+package delivery
+
+import integration.delivery.{DeliveryRequest, DeliveryResponse}
+import order.{DeliveryServiceRequest, DeliveryServiceResponse}
 
 import akka.actor.{ActorRef, FSM}
 

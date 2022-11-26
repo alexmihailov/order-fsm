@@ -1,4 +1,8 @@
-package com.witcher.order
+package com.witcher
+
+import delivery._
+import integration.delivery.{DeliveryRequest, DeliveryResponse}
+import order.{DeliveryServiceRequest, DeliveryServiceResponse}
 
 import akka.actor.FSM.{CurrentState, SubscribeTransitionCallBack, Transition}
 import akka.actor.{ActorSystem, Props}
@@ -10,7 +14,7 @@ import org.scalatest.matchers.must.Matchers
 import java.util.UUID
 import scala.concurrent.duration.DurationInt
 
-class DeliveryFsmActorTest extends TestKit(ActorSystem("order-system"))
+class DeliveryFsmActorTest extends TestKit(ActorSystem("order-system-test"))
   with ImplicitSender
   with AnyFunSpecLike
   with Matchers

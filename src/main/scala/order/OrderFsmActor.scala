@@ -1,4 +1,9 @@
-package com.witcher.order
+package com.witcher
+package order
+
+import delivery.DeliveryFsmActor
+import integration.notify.{ManagerNotify, UserNotify}
+import integration.store.{StoreServiceRequest, StoreServiceResponse}
 
 import akka.actor.{ActorRef, FSM, PoisonPill, Props}
 

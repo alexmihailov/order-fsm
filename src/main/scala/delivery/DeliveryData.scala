@@ -1,4 +1,5 @@
-package com.witcher.order
+package com.witcher
+package delivery
 
 import akka.actor.ActorRef
 
