@@ -36,7 +36,24 @@ function changeBackground(current, prev) {
     document.getElementById(prev).style.backgroundColor="#ffff00"
 }
 
+function restart() {
+    socket.send("order-restart")
+    socket.close()
+    connectToWs()
+}
+
 function confirmOrder() {
     socket.send("order-confirmation")
 }
 
+function payOrder() {
+    socket.send("order-pay")
+}
+
+function orderInPickupPoint() {
+    socket.send("order-in-pickup-point")
+}
+
+function orderReceived() {
+    socket.send("order-received")
+}
