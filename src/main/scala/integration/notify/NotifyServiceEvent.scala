@@ -3,6 +3,9 @@ package integration.notify
 
 import java.util.UUID
 
+/**
+ * Базовый интерфейс событий системы нотификаций.
+ */
 sealed trait NotifyServiceEvent
 
 /**

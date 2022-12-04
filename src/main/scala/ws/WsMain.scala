@@ -23,6 +23,11 @@ import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
 import scala.io.StdIn
 
+/**
+ * Входная точка в приложение.
+ * Запускает систему акторов и начинает слушать websocket.
+ * Через websocket будут отправляться команды для актора обработки заказа.
+ */
 object WsMain {
 
   implicit val system: ActorSystem = ActorSystem("order-system")

@@ -9,6 +9,10 @@ import akka.actor.{ActorRef, LoggingFSM}
 import java.util.UUID
 import scala.concurrent.duration.FiniteDuration
 
+/**
+ * Актор для отправки сообщений в службу доставки.
+ * В случае ошибки запрос будет повторяться, пока не кончится количество попыток.
+ */
 class DeliveryFsmActor(
    private val config: DeliveryFsmActor.Config,
    private val deliveryServiceActor: ActorRef,

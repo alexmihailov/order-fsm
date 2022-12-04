@@ -5,7 +5,11 @@ import akka.actor.ActorRef
 
 import java.util.UUID
 
+/**
+ * Базовый интерфейс событий сервиса складов.
+ */
 sealed trait StoreServiceEvent
+
 /**
  * Запрос в сервис складов для проверки доступности и резервации товаров.
  *

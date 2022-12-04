@@ -1,9 +1,12 @@
 package com.witcher
 package delivery
 
-import akka.actor.ActorRef
-
-import java.util.UUID
-
+/**
+ * Базовый интерфейс для событий доставки.
+ */
 sealed trait DeliveryEvent
+
+/**
+ * Остановить актор доставки.
+ */
 case object StopDelivery extends DeliveryEvent
